@@ -48,6 +48,7 @@ try:	prl.o try.o
 
 test:	try
 	@echo "Running test script."
+	@chmod 755 ./test.sh
 	@./test.sh
 
 clean:
