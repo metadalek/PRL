@@ -1,0 +1,689 @@
+PRL()                                                                    PRL()
+
+
+
+NNAAMMEE
+       prl_compile,   prl_free,   prl_match,   prl_search,  prl_capture_count,
+       prl_capture, prl_capture_string, prl_free,  prl_internals,  prl_status,
+       prl_set_parameter
+
+       #include <stdint.h>
+       #include "prl.h"
+
+       int prl_compile(prl_t * prl, const unsigned char * pattern);
+
+       int prl_match(prl_t prl, unsigned const char * str, int64_t flags);
+
+       int prl_search(prl_t prl, unsigned const char * str, int64_t flags);
+
+       void prl_free(prl_t prl);
+
+       void prl_status(prl_t prl);
+
+       void prl_internals(prl_t prl);
+
+       int64_t prl_capture_count(prl_t prl);
+
+       void prl_capture(prl_t prl, int64_t index,
+                            const unsigned char ** start,
+                            int64_t * len);
+
+       unsigned char * prl_capture_string(prl_t prl, int64_t index);
+
+       const char * prl_error(prl_t prl);
+
+       void prl_set_parameter(prl_t prl, int64_t parameter, int64_t value);
+
+
+SSYYNNOOPPSSIISS
+       PRL  is  a relatively small, relatively simple, portable regex matching
+       library written in stardard C. It requires no libraries other than  the
+       standard C library to work.
+
+       It  is  not fully compatible with POSIX regex standards but does imple-
+       ment pretty much all the useful bits and quite a few  extensions  found
+       in very complete regex libraries such as PCRE.
+
+       In  size  and  feature  set  tradeoffs it sits somewhere between a tiny
+       regex library like SLRE, and a fully featured but much larger and  more
+       complex library such as PCRE.
+
+       PRL is primarily designed to work in embedded applications.
+
+       Some interesting/unusual features of PRL are:
+
+
+       - there are no practical restrictions on the size or
+                      number of anything until you run out of
+                      virtual memory.
+
+       - all subexpressions create a capture. No exceptions.
+                      The number of captures in the regex is
+                      therefore the number of unquoted "("
+                      characters.
+
+       - there are no regex compile time flags. Any flags are passed in
+                      at  the  time  the regex is matched. For example, you do
+              not have
+                      to decide if you are doing case invarient matching
+                      before the regex is compiled.
+
+
+       - there are no practical limits on the subexpressions that can be
+                      used for lookaround. Note that this means its easy to
+                      make things go really slowly.
+
+
+SSYYNNTTAAXX
+       The general syntax (in EBNF) is very similar to PCRE.
+
+
+       <regex> ::= <branch>
+                |  <regex> "|" <branch>
+
+       <branch> ::= <piece>
+                 |  <branch> <piece>
+
+       <piece> ::= <atom>
+                |  <atom> <repeat_operator>
+
+       <atom> ::= <subexpression>
+               |  <bracket-expression>
+               |  "."
+               |  <assertion>
+               |  <literal>
+               |  <backrefence>
+               |  <function_subexpression>
+               |  <call_subexpression>
+               |  <named_subexpression>
+               |  <atomic_subexpression>
+               |  <optioned_subexpression>
+
+       subexpression ::= "(" <regex> ")"
+
+       optioned_subexpression ::= "(?" <options> ":" <regex> ")"
+
+       <options> ::= <option> { <option }
+
+       <option> ::= ">" | "i" | "n" | "r" | "d" |  "z" | "+" | "-"
+
+       <atomic_subexpression> ::= "(>" <regex> ")"
+
+       <assertion> ::= <simple_assertion>
+                    |  <assertion_subexpression>
+
+       <simple_assertion> ::= "^"
+                           |  "$"
+
+       <assertion_subexpression> ::= "(?=" <regex> ")"
+                                  |  "(?!" <regex> ")"
+                                  |  "(?<" <regex> ")"
+                                  |  "(?#" <string> ")"
+
+       <backslash_expression> ::= "\x" <digit> <digit>
+                               |  "\"  <simple_literal> - <digit>
+
+       <literal> ::= <backslash_expression>
+                  |  <simple_literal>
+
+       <simple_literal> ::= any 8 bit ASCII character
+
+       <string> ::= <simple_literal> { <simple_literal> }
+
+
+       <repeat_operator> ::= "*"
+                          |  "+"
+                          |  "?"
+                          |  <bound>
+                          |  "*?"
+                          |  "+?"
+                          |  "??"
+                          |  <bound> "?"
+                          |  "*+"
+                          |  "++"
+                          |  "?+"
+                          |  <bound> "+"
+
+       <bound> ::= "{" <number> "," <number> "}"
+                |  "{" <number> ",}"
+                |  "<" <number> "}"
+
+       <number> ::= digit { digit }
+
+       <digit> ::= "0" | "1" | "2" | "3" | "4"
+                |  "5" | "6" | "7" | "8" | "9"
+
+       <bracket-expression> ::= "["  <item> { <item> } "]"
+                             |  "[^" <item> { <item> } "]"
+
+       <item> ::= <literal>
+               |  <literal> "-" <literal>
+               |  <named_chararacter_class>
+
+       <named_character_class> ::= "[:alnum:]" | "[:alpha:]" | "[:blank:]" | "[:cntrl:]"
+                                |  "[:digit:]" | "[:graph:]" | "[:lower:]" | "[:print:]"
+                                |  "[:punct:]" | "[:space:]" | "[:upper:]" | "[:xdigit:]"
+                                |  "[:ALNUM:]" | "[:ALPHA:]" | "[:BLANK:]" | "[:CNTRL:]"
+                                |  "[:DIGIT:]" | "[:GRAPH:]" | "[:LOWER:]" | "[:PRINT:]"
+                                |  "[:PUNCT:]" | "[:SPACE:]" | "[:UPPER:]" | "[:XDIGIT:]"
+
+       <backreference> ::= "\" digit
+                        |  "(?P=" <string> ")"
+
+       <named_subexpression> ::= "(?P<" <string> ">" <regex> ")"
+
+       <function_subexpression> ::= "(?F<" <string> ">" <regex> ">"
+
+       <call_subexpression> ::= "(?F=" <string> ")"
+
+
+
+
+SSEEMMAANNTTIICCSS
+   NNoonn--ssppeecciiaall CChhaarraacctteerrss
+       Any character not part of a character sequence  special  to  the  regex
+       language matches itself.
+
+
+   DDoott
+       Normally  a  dot  matches  any  single character except a newline.  See
+       _F_l_a_g_s for details on how matching a dot against  newline  and  carriage
+       return newline sequences can be altered.
+
+
+   BBrraanncchheess
+       A  branch consists of 2 pieces, one on the left and one on the right of
+       the branch operator.
+
+       The left hand side is matched first.  If the match is  successful,  the
+       engine  continues  and tries to match to the end of the regex.  If suc-
+       cessful, the left hand side result is returned and no further  matching
+       is required.
+
+       If  the left hand side match is successful but no match can be found to
+       the end of the regex, the right hand side is matched.   If  successful,
+       the  engine  continues  and  tries to match to the end of the regex. If
+       sucessful, the result from the right hand side is returned and no  fur-
+       ther matching is necessary.
+
+       If  no  match is successful to the end of the regex, the left hand side
+       result is returned if successful, else the right hand  side  result  is
+       returned.
+
+       The  above  behaviour  can  be  altered  by the PRL_ATOMIC flag. If the
+       PRL_ATOMIC flag is set and the left hand side matches,  the  result  of
+       that  match  is returned and no attempt is made to match the right hand
+       side.
+
+
+   RReeppeeaattss
+       If the repeat_operator is "*", the preceding atom is matched 0 or  more
+       times.  The match is greedy, meaning the match repeats as many times as
+       possible.  After matching as many times as possible, if the regex  does
+       not match to completion, backtracking occurs and the regex engine tries
+       to match with 1 less instance of the atom and then 2 less and so on.
+
+       The "+" repeat operator is similar to the "*" operator, but  matches  1
+       or more times.  The "?" repeat operator is similar again, but matches 0
+       or 1 times.
+
+       A bound limits the number of repeats to between m and  n  (non-negative
+       integers)  inclusive  when the "{m,n}" form is used, m or more when the
+       "{m,}" is used or exactly m when the form "{m}" is used.
+
+       If the any of the repeat operators above is  followed  by  a  "?"   the
+       match is non-greedy, meaning the match is satisfied as soon as the min-
+       imum number of matches requested is satisfied. "*?"  therefore  immedi-
+       ately matches 0 instances of the atom.
+
+       If  any  of  the  repeat  operators  is  followed by a "+" the match is
+       atomic. In this case the match is greedy, but no  backtracking  occurs.
+       This can be used to increase performance, but also can alter the behav-
+       iour of the match. The behaviur of the repeat can also be set to atomic
+       via flags.  See _F_l_a_g_s.
+
+       Once  a  repeat  operator  is satisfied, the regex engine continues and
+       tries to match the remaining regex against the remaining target string.
+       If successful, the result is returned.
+
+       If  not  sucessful  and  the  repeat operator is not atomic, the repeat
+       operator backtracks by giving up a match and trying  to  match  forward
+       again.  This  continues  until  the repeat operator reaches its minimum
+       number of matches.  At that point  if  the  match  forward  fails,  the
+       entire repeat operator fails.
+
+       A  repeat  operator  followed  by  a "?" (non-greedy) followed by a "+"
+       (atomic) is a syntax error.
+
+
+   BBrraacckkeett eexxpprreessssiioonnss
+       A bracket expression matches 1 character from a set.
+
+       Any literal matches itself. In the case of 2 simple literals  separated
+       by a hyphen, the item matches any character between the 2 simple liter-
+       als inclusive.  The integer value of the start of  the  range  must  be
+       less or equal to the end.
+
+       If  the  bracket expression begins with "[^" the comparison is negated.
+       That is, the expression matches any charcter not in the set.
+
+       After "^" (if present) if the first character in the  set  is  a  right
+       square  bracket, it is treated as a character to add to the set with no
+       special meaning.
+
+       Since the items can be literals, backslash  expressions  can  be  used.
+       Example  "[\x30-\x34]" would match a digit in the range 0 to 4 as would
+       "[0-\x34]" or "[0-4]". "[0\-4]" would match 0 or a hyphen  or  4.   See
+       _B_a_c_k_s_l_a_s_h _e_x_p_r_e_s_s_i_o_n_s.
+
+       The  named  character  classes are equivalent to the matching backslash
+       character classes documented below but can  only  be  used  in  bracket
+       expressions.   For  example,  "[:space:]"  is  equivelent to "\s".  See
+       _b_a_c_k_s_l_a_s_h _e_x_p_r_e_s_s_i_o_n_s for a mapping of character  class  names  to  the
+       equivalent backslash character classes.
+
+       Matching  of  the  character  class  names is case invariant but if the
+       first letter of the name is upper case, the match  is  negated  in  the
+       same  way  as  upper  case  backslash  expresions  are  negated.   Thus
+       "[:DIGIT:]" matches any character which is not a digit in the same  way
+       as "\D".
+
+       Narrow  literals  are not permitted in bracket expressions. There is no
+       support for collating elements.
+
+
+   BBaacckkssllaasshh eexxpprreessssiioonnss
+       A backslash expression is a backslash character followed by an "x"  and
+       2 hexidecimal digits or a backslash followed by a single character.
+
+       If  the  character after the backslash is a digit the backslash expres-
+       sion is a backreference (see _B_a_c_k_r_e_f_e_r_e_n_c_e _e_x_p_r_e_s_s_i_o_n_s). In  all  other
+       cases the character after the backslash designates a character class or
+       itself.
+
+       The supported backslash character classes are:
+
+       \\                backslash
+       \e                escape
+       \n                newline (see _F_l_a_g_s)
+       \r                carriage return
+       \t                horizontal tab
+       \v                vertical tab
+       \l                lower case character (islower)
+       \u                upper case character (isupper)
+       \p                punctuation character (ispunct)
+       \w                word character (isdigit(3) or isalpha(3) or underscore)
+       \z                alternate word character (isalpha(3) or hyphen)
+       \s                space (isspace(3))
+       \d                digit (isdigit(3))
+       \h                hexadecimal digit (isxdigit(3))
+       \c                control char (iscntrl(3))
+       \a                alphanumeric (isalpha(3))
+       \o                printable character (isprint(3))
+       \y                blank character (isblank(3))
+       \g                graphable character (ispunct(3) or isalnum(3))
+       \b                word boundary (narrow, see below)
+       \<                start of word (narrow, see below)
+       \>                end of word (narrow, see below)
+       \xnn              character with hex value nn
+
+
+       If the character after the backslash has no special meaning  documented
+       above, it is a quoted character and matches itself. Special meaning can
+       be removed from any special character by preceding it with a backslash.
+       For  example,  the  regex  "[\^\]]"  is a bracket expression which will
+       match a caret or a right square brace.
+
+       In all cases where the character class character is a letter, the upper
+       case  equivalent  can  be  used  to negate the match. For example, "\a"
+       matches any alphanumeric character, while "\A"  matches  any  character
+       which is not alphanumeric.
+
+       The  word  boundary,  start of word and end of word classes are narrow,
+       meaning they consume no characters in  the  match  string.   Note  this
+       means  they  cannot  be  used  in bracket expressions and are, in fact,
+       really assertions.
+
+       The start of word class matches when the current character in the match
+       string  is a word character and the preceding character (if present) is
+       not a word character.
+
+       The end of word class matches when the current character in  the  match
+       string is not a word character and the preceding character (if present)
+       is a word character.
+
+       The word boundary class matches when either the end of  word  class  or
+       the start of word class matches.
+
+       If  the flag PRL_ALTWORDS is set, then the standard word matching class
+       is set to behave the same as the alternate word character class.   This
+       affects word boundaries.
+
+       Hexidecimal numbers are case invarient.
+
+       See _F_l_a_g_s.
+
+
+   BBaacckkrreeffeerreennccee eexxpprreessssiioonnss
+       A  backreference  matches a previous capture created by a subexpression
+       which may be named or unnamed. Captures can be referenced by  both  the
+       number and the name of the subexpression which created them.
+
+       There  are  2 methods of accessing a capture. If the "\<digit>" form is
+       used the captures is referenced by the position  of  the  subexpression
+       which created it in the range 0 to 9.
+
+       If  the  "(?P="  form  is used the capture is referenced by the name or
+       position of the subexpression that created them.
+
+       If the name is all digits it is taken as a reference to  a  capture  by
+       position.   This allows for references by position to positions greater
+       than 9.
+
+       If the name is not all digits, it must refer to a capture created by  a
+       subexpression  which has a name. This means either named subexpressions
+       or function subexpressions.
+
+       The value of the capture is zero or more  characters  from  the  string
+       being matched. The string thus obtained by the backreference is matched
+       against the target string at the current position.   Zero  length  cap-
+       tures always match but are obviously narrow.
+
+       Captures may change their value as the regex is matched.
+
+       See _C_a_p_t_u_r_e_s.
+
+
+   AAsssseerrttiioonnss
+       All  assertions  are  narrow, meaning they consume no characters in the
+       string being matched whether they match or not.  Assertions  which  are
+       subexpressions create a capture, as do all subexpressions.
+
+       Normally a "^" matches at the begining of the search string and nowhere
+       else.  Normally a "$" matches at the end of the text string and nowhere
+       else.  See _F_l_a_g_s for details of altering this behaviour of these opera-
+       tors at line boundaries.
+
+       A "(?=" takes the contained regex, and matches forward from the current
+       location  on  the text string. It returns true if the regex matches but
+       being narrow the position in the text string is not advanced.
+
+       A "(?!" is similar, but returns true if the contained  regex  does  not
+       match.
+
+       A "(?<" is similar again, but matches the text behind the current posi-
+       tion in the text string. In the general case, the engine works by  try-
+       ing  to  match  1  character  behind  the  current position in the text
+       string, then 2 and so on. This can be expensive. However, if  the  con-
+       tained  regex  is a simple string, the match is efficient and performed
+       in a single operation.  Use with care. The default maximum distance  to
+       look  behind  is 1024 characters. This can be set higher or lower.  See
+       _P_a_r_a_m_e_t_e_r_s.
+
+       The are no restrictions on the content of the contained regex.
+
+       A "(?#" is a comment. The comment  string  can  contain  any  character
+       except  an unquoted ")".  It always matches true. It produces a capture
+       whose contents are the comment string.
+
+       The backslash expressions "\>", "\<", "\b" and "\B" may also be consid-
+       ered assertions since they consume no characters in the match string.
+
+
+
+   SSuubbeexxpprreessssiioonnss
+       Any  regex  enclosed  in parenthesis is a subexpression. It matches the
+       regex it contains. It also creates a capture. See _C_A_P_T_U_R_E_S.
+
+       Subexpressions are numbered as they are encountered. Thus the number of
+       subexpressions in the regex is always the total number of unquoted left
+       braces it contains. Subexpression zero is the entire regex.
+
+       Addionally, subexpressions may be allocated a name  and  referenced  by
+       name or number as functions or captures.
+
+
+   FFuunnccttiioonnss
+       A  function  is  a  named  subexpression which always matches true when
+       encountered during normal processing and at that time creates a capture
+       which  is  the name of the subexpression.  When called, a function cre-
+       ates a capture like any other subexpression.
+
+       A function call is equivalent to taking the named expression it  refer-
+       ences and pasting it in at the location of the function call subexpres-
+       sion.  Any named subexpression (not just a function subexpression)  can
+       be  used as the function regex. The return value of the function all is
+       the result of the match of the named subexpresion.
+
+
+   CCaappttuurreess
+       All subexpressions of any type create a capture as  they  are  matched.
+       There  are no exceptions, and there is no way to create a non-capturing
+       subexpression and there is no way to turn capturing off.  "[:alnum:]" |
+       "[:alpha:]" | "[:blank:]" | "[:cntrl:]"
+                                |   "[:digit:]"  | "[:graph:]" | "[:lower:]" |
+       "[:print:]"
+                                |  "[:punct:]" | "[:space:]" |  "[:upper:]"  |
+       "[:xdigit:]"
+
+       The  value  of  a  capture  is  normally the characters from the target
+       string which are consumed by the  subexpression.   If  a  subexpression
+       does  not  match,  the value of the capture it creates is a zero length
+       string.  Note that a subexpressions failure to match does not mean that
+       contained  subexpressions  have  zero  length captures if the contained
+       subexpressions did match.
+
+       Each subexpression gets allocated an index, starting from 1 and a name.
+       If  a subexpression is not given a name explicitly, the name is the the
+       index number (treated as a string).
+
+       The entire regex is allocated capture index 0.
+
+       Captures can be used as strings during a  regex  match.  Referencing  a
+       capture is the same as inserting the characters in the capture directly
+       into the regex as matching occurs. Referencing a capture before  it  is
+       defined  is  not  allowed.  Referencing  a capture while the capture is
+       active is allowed and matches the string of characters captured so far.
+       For  example,  "(.*\1)"  would match "borkbork" but not "borkborkbork".
+       Note that "(.*\0)" would behave the same way.
+
+       Captures are created and can be retrieved regardless of the success  or
+       failure  of  a  matching  operation.  This  can be useful for debugging
+       regexes. See _p_r_l___s_t_a_t_u_s.
+
+
+
+   AAttoommiicc ssuubbeexxpprreessssiioonnss
+       The contained regex is matched with the PRL_ATOMIC flag turned on.  See
+       _F_l_a_g_s.
+
+
+   OOppttiioonnss
+       Matching of subexpressions may be altered by adding or removing options
+       to the subexpression. These options apply to the subexpression and  any
+       subexpressions or branch expressions it contains. These options are the
+       same options which may be passed as flags to  the  matching  functions.
+       See _F_l_a_g_s.
+
+       Options can be turned on or off by this method.
+
+       The options and their meanings are:
+
+
+       +       turn on the following options
+       -       turn off the following options
+       i       same as PRL_ICASE
+       n       same as PRL_NLISEOS
+       r       same as PRL_CRNLISEOS
+       d       same as PRL_DOTNOEOS
+       z       same as PRL_ALTWORDS
+       >       same as PRL_ATOMIC
+
+       For compatability with other regex engines if the fist option character
+       is ">" then the PRL_ATOMIC flag is turned on and no other  option  pro-
+       cessing is done. The next character after the ">" is considered part of
+       the the following subexpression regex.  Thus  "(?>"  is  equivalent  to
+       "(?+>:"
+
+       When  option  processing  starts the default is to turn options on when
+       encountered.
+
+       Setting or clearing flags in the regex overides flags passed in to  the
+       matching functions.
+
+
+   FFllaaggss
+       The  regex  engine  supports several flags which alter the behaviour of
+       the engine when performing matches. Unlike many  other  regex  engines,
+       flags are not required to be specified at regex compile time. All flags
+       are set either by arguments to the match  functions  or  in  the  regex
+       itself.
+
+       The supported flags are:
+
+       PRL_ICASE          characters are matched case invarient
+       PRL_ATOMIC         repeats and branches are atomic (see below).
+       PRL_DOTNOEOS       dot does not match at end of string
+       PRL_NLISEOS        newline char is end of string
+       PRL_CRNLISEOS      carriage-return/newline is end of string
+       PRL_ALTWORDS       use alternative definition of word characters (see below).
+       PRL_SIMPLE         use the regex as a simple string for the match
+
+       The PRL_ATOMIC flag alters the behaviour of repeat and branch matching.
+       See their descriptions above for details.
+
+       The PRL_ALTWORDS alters the definition of word characters (see "\w"  in
+       _b_a_c_k_s_l_a_s_h  _e_x_p_r_e_s_s_i_o_n_s)  to  be more natural language focussed. If set,
+       words are defined as alphabetic characters  or  hyphen.   See  "\z"  in
+       _b_a_c_k_s_l_a_s_h _e_x_p_r_e_s_s_i_o_n_s.
+
+
+   PPaarraammeetteerrss
+       There are 2 internal limits used by the regex engine that can be set by
+       _p_r_l___s_e_t___p_a_r_a_m_e_t_e_r. Both are 64 bit signed integers.
+
+       _P_R_L___M_A_X___R_E_C_U_R_S_I_O_N___D_E_P_T_H is the maximum depth the  engine  will  recurse
+       when  using  recursive subexpressions. The default is normally 1024 but
+       can be smaller if the code detects a very small stack  size  via  getr-
+       limit(2).   Note  this limit applies to total recursion depth including
+       nested recursion. This limit is designed as an attempt to prevent stack
+       exhaustion.   The  minimum allowed for this parameter is 8. There is no
+       maximum limit.
+
+       _P_R_L___M_A_X___L_O_O_K_B_E_H_I_N_D is the maximum number of characters the engine  will
+       go  backwards  when matching a lookbehind assertion.  It does not apply
+       if the lookbehind regex is a simple string in which case  there  is  no
+       limit.  The default is 1024.  The minimum allowed for this parameter is
+       4. There is no maximum limit.  This limit is designed as an attempt  to
+       increase performance.
+
+       Trying  to  set a parameter to a value smaller than its allowed minimum
+       sets it to the allowed minimum.
+
+AAPPII
+       #include "prl.h"
+
+       int prl_compile(char * regex, prl_t * prl)
+
+       int prl_match(prl_t, char *, int64_t flags)
+
+       int prl_search(prl_t, char *, int64_t flags)
+
+       void prl_free(prl_t)
+
+       void prl_set_parameter(prl_t, int64_t, int64_t)
+
+       const char * prl_capture_string(prl_t, int64_t)
+
+       capture_t prl_capture(prl_t, int64_t)
+
+       int64_t prl_capture_count(prl_t)
+
+       const char * prl_error(prl_t)
+
+       void prl_internals(prl_t)
+
+       void prl_status(prl_t)
+
+
+       _p_r_l___c_o_m_p_i_l_e compiles a regular expression passed as _p_a_t_t_e_r_n.  The  com-
+       piled regex is returned in the location referenced by the _p_r_l argument.
+       The compiled regex is an opaque pointer type.
+
+       A return value of PRL_SUCCESS indicates success.  Any other value is  a
+       failure. See _p_r_l___e_r_r_o_r.
+
+       Using a compiled regular expression across threads is not safe.
+
+       _p_r_l___m_a_t_c_h matches the compiled regular expression passed as _p_r_l against
+       the string passed as _s_t_r.
+
+       It returns PRL_SUCCESS if the entire  string  matches  the  regex.  Any
+       other return value indicates failure.
+
+       _f_l_a_g_s  is  an  integer  made  up of the bitwise or of the allowed flags
+       defined in _p_r_l_._h.  See _F_l_a_g_s.
+
+       _p_r_l___s_e_a_r_c_h is similar to _p_r_l___c_o_m_p_i_l_e above, but  searches  for  a  sub-
+       string  of  the  supplied  string that matches the pattern. Once a sub-
+       string is found, searching  stops.   Return  values  are  the  same  as
+       _p_r_l___m_a_t_c_h.
+
+       If  the flag _P_R_L___C_R_N_L_I_S_E_O_S is set, fart ever advanced by a single char-
+       acter when a match fails. This can could produce  unexpected  behaviour
+       if either of the _P_R_L___C_R_N_L_I_S_E_O_S or _N_L_I_S_E_O_S flags is set.
+
+       _p_r_l___f_r_e_e  frees the memory allocated to the compiled regular expression
+       passwd as _p_r_l.
+
+       _p_r_l___e_r_r_o_r returns the error message associated with the  current  error
+       code  as returned by _p_r_l___c_o_m_p_i_l_e, _p_r_l___m_a_t_c_h or _p_r_l___s_e_a_r_c_h. The returned
+       string is from static memory and must not be freed  by  the  caller  or
+       else memory corruption will occur.
+
+       _p_r_l___c_a_p_t_u_r_e___c_o_u_n_t returns the number of captures available in the regu-
+       lar expression passed as the argument.  See _C_a_p_t_u_r_e_s.
+
+       _p_r_l___c_a_p_t_u_r_e can be used to obtain the capture string numbered by  _i_n_d_e_x
+       after  a  sucessful  (or unsuccessful) match.  The start and len of the
+       capture are placed in the locations referenced by _s_t_a_r_t and _l_e_n respec-
+       tively.
+
+       If the value of _i_n_d_e_x is invalid, a zero length capture is returned.
+
+       _p_r_l___c_a_p_t_u_r_e___s_t_r_i_n_g  returns  the  value  of  a capture (ala prl_capture
+       above) as a null terminated string.  The storage used is obtained  from
+       malloc(2) and must be freed by the caller to avoid memory leaks.
+
+       _p_r_l___s_t_a_t_u_s  prints to stdout the current internal state of the compiled
+       regex including the return value of the last match and captures if such
+       there  be.   Also  attempts  to  show  the  location where an error was
+       detected while compiling the regex.
+
+       _p_r_l___i_n_t_e_r_n_a_l_s prints to stdout a representation of the compiled  regex,
+       showing  nodes  and their relationships. Mainly for debugging the regex
+       library itself but can be useful for debugging regex patterns in a cri-
+       sis.
+
+       _p_r_l___s_e_t___p_a_r_a_m_e_t_e_r is used to set internal parameters used by the match-
+       ing engine.  The first argument designates the parameter to be set, the
+       second  argument  is  the  value  to  be assigned to the parameter. See
+       _P_a_r_a_m_e_t_e_r_s.
+
+
+TTHHRREEAADDIINNGG
+       All the code in PRL is fully re-entrant.  State is kept in the compiled
+       regex.  Using a compiled regex in different threads at the same time is
+       not safe.
+
+
+BBUUGGSS
+       None known.
+
+
+AAUUTTHHOORR
+       Peter D. Gray metadalek@gmail.com
+
+
+
+                                                                         PRL()

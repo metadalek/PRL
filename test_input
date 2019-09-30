@@ -1,0 +1,689 @@
+#
+# fields: regex string result num_captures capture_number captured_string flags
+#
+#
+#
+# num_captures and capture_number, subexp must be integers (ignored if negative)
+# hypen means null for any string except regexp
+#
+# result:
+#	y compiles and matches
+#	n compiles but no match
+#	c does not compile
+#
+# flags:
+#		-	nothing
+#		i	same as PRL_ICASE
+#		a	same as PRL_ANCHORED
+#		s	search (default)
+#		m	match
+#		n	same as PRL_NLISEOS
+#		r	same as PRL_CRNLISEOS
+#		d	same as PRL_DOTNOEOS
+#
+#	Any number of flags can be specied (no checks for sanity)
+#
+# substitution into string and captures
+#
+#	@ = space
+#	& = newline
+#	&& = crnl
+#
+#	Note: carriage return can be inserted directly since this
+#		is a unix text file
+#
+# Simple
+#
+fred		fred	y	1 	0	fred		-
+.*		fred	y	1 	0	fred		-
+a.c		abc	y	1	0	abc		-
+a.c		axc	y	1	0	axc		-
+a.b		a&c	n	1	0	-		-
+#
+.*		theraininspainstaysmainlyontheplain y	1 	0	theraininspainstaysmainlyontheplain -
+#
+# Comments
+#
+fred(?#comment_string)jim	fredjim			y	2	0	fredjim		-
+fred(?#comment_string)jim	fredjim			y	2	1	comment_string	-
+#
+# Named subexpressions
+#
+fred(?P<c1>bert)		fredbert		y	2	0	fredbert	-
+fred(?P<c1>bert)		fredbert		y	2	1	bert		-
+fred(?P<c1>bert)\1		fredbertbert		y	2	0	fredbertbert	-
+fred(?P<c1>bert)\1		fredbertbert		y	2	1	bert		-
+fred(?P<c1>bert)(?P=c1)		fredbertbert		y	3	0	fredbertbert	-
+fred(?P<c1>bert)(?P=c1)		fredbertbert		y	3	1	bert		-
+fred(?P<c1>bert)(?P=c1)		fredbertbert		y	3	2	bert		-
+fred(?P<c1>bert)(?P=c1)		fredbertabert		n	3	2	bert		-
+#
+# Functions
+#
+(?F<f1>.*bert)fred(?F=f1)	fredmarybert		y	3	0	fredmarybert	-
+(?F<f1>.*bert)fred(?F=f1)	fredmarybert		y	3	1	f1		-
+(?F<f1>.*bert)fred(?F=f1)	fredmarybert		y	3	2	marybert	-
+(?F<f1>fred)(?F=f1)(?F=f1)	abcfredfreddef		y	4	0	fredfred	-
+(?F<f1>fred)(?F=f1)(?F=f1)	abcfredfreddef		y	4	1	f1		-
+(?F<f1>fred)(?F=f1)(?F=f1)	abcfredfreddef		y	4	2	fred		-
+(?F<f1>fred)(?F=f1)(?F=f1)	abcfredfreddef		y	4	3	fred		-
+#
+#
+# Named subexpressions as functions
+#
+fred(?P<c1>bert)syd(?F=c1)	fredbertsydbert		y	3	0	fredbertsydbert	-
+fred(?P<c1>bert)syd(?F=c1)	fredbertsydbert		y	3	1	bert		-
+fred(?P<c1>bert)syd(?F=c1)	fredbertsydbert		y	3	2	bert		-
+#
+# Repetition
+#
+*a		-	c	-1	-1	-		-
+a.*c		axyzc	y	1	0	axyzc		-
+a.*c		axyzd	n	-1	-1	-		-
+((((a*a*)a)b*)b) aaaabb	y	5	0	aaaabb		-
+((((a*a*)a)b*)b) aaaabb	y	5	1	aaaabb		-
+((((a*a*)a)b*)b) aaaabb	y	5	2	aaaab		-
+((((a*a*)a)b*)b) aaaabb	y	5	3	aaaa		-
+((((a*a*)a)b*)b) aaaabb	y	5	4	aaa		-
+a*a		a	y	1	0	a		-
+a*a		aa	y	1	0	aa		-
+a*a		aaa	y	1	0	aaa		-
+a*		aaa	y	1	0	aaa		-
+a*aa		aaa	y	1	0	aaa		-
+#
+#
+*abc		abc	c	-1	-1	-		-
+abc		abc	y	1	0	abc		-
+abc		xbc	n	0	-1	-		-
+abc		axc	n	-1	-1	-		-
+abc		abx	n	-1	-1	-		-
+abc		xabcy	y	1	0	abc		-
+abc		ababc	y	1	0	abc		-
+ab*c		abc	y	1	0	abc		-
+ab*bc		abc	y	1	0	abc		-
+ab*bc		abbc	y	1	0	abbc		-
+ab*bc		abbbbc	y	1	0	abbbbc		-
+ab+bc		abbc	y	1	0	abbc		-
+ab+bc		abc	n	-1	-1	-		-
+ab+bc		abq	n	-1	-1	-		-
+ab+bc		abbbbc	y	1	0	abbbbc		-
+ab?bc		abbc	y	1	0	abbc		-
+ab?bc		abc	y	1	0	abc		-
+ab?bc		abbbbc	n	-1	-1	-		-
+ab?c		abc	y	1	0	abc		-
+#
+# Assertions
+#
+^abc$		abc	y	1	0	abc		-
+^abc$		abcc	n	-1	-1	-		-
+^abc		abcc	y	1	0	abc		-
+^abc$		aabc	n	-1	-1	-		-
+abc$		aabc	y	1	0	abc		-
+^		abc	y	1	0	-		-
+$		abc	y	1	0	-		-
+#
+# Assertion flags
+#
+# NLISEOS
+#
+^abc		d&abc	n	1	0	-		-
+^abc		d&abc	y	1	0	abc		n
+^abc$		d&abcd	n	1	0	-		-
+^abc$		d&abc&d	y	1	0	abc		n
+#
+#
+# CRNLISEOS
+#
+^abc$		d&&abc&&d	n	1	0		-	-
+^abc$		d&&abc&&d	y	1	0		abc	r
+#
+#
+# Branches
+#
+abc|def|hij	abc	y	1	0	abc		-
+abc|def|hij	def	y	1	0	def		-
+abc|def|hij	hij	y	1	0	hij		-
+abc|def|hij	hi	n	-1	-1	-		-
+abc|def|hij	hiq	n	-1	-1	-		-
+ab|cd		abc	y	1	0	ab		-
+ab|cd		abcd	y	1	0	ab		-
+ac|cd		abcd	y	1	0	cd		-
+#
+# Brackets
+#
+a[bc]d		abc	n	-1	-1	-		-
+a[bc]d		abd	y	1	0	abd		-
+a[b-d]e		abd	n	-1	-1	-		-
+a[b-d]e		ace	y	1	0	ace		-
+a[b-d]		aac	y	1	0	ac		-
+a[-b]		a-	y	1	0	a-		-
+a[b-]		a-	y	1	0	a-		-
+[k]		ab	n	-1	-1	-		-
+a[b-a]		-	c	-1	-1	-		-
+a[]b		-	c	-1	-1	-		-
+a[		-	c	-1	-1	-		-
+a]		a]	y	1	0	a]		-
+a[]]b		a]b	y	1	0	a]b		-
+a[^bc]d		aed	y	1	0	aed		-
+a[^bc]d		abd	n	-1	-1	-		-
+a[^-b]c		adc	y	1	0	adc		-
+a[^-b]c		a-c	n	-1	-1	-		-
+a[^]b]c		a]c	n	-1	-1	-		-
+a[^]b]c		adc	y	1	0	adc		-
+#
+# Empty subexpressions
+#
+()ef		def	y	2	0	ef		-
+()*		abd	y	2	0	-		-
+#
+#
+# Miscellaneous
+#
+^*		abc	y	1	0	-		-
+$*		abc	y	1	0	-		-
+(*)b		-	c	-1	-1	-		-
+$b		b	n	-1	-1	-		-
+a\		-	c	-1	-1	-		-
+a\(b		a(b	y	1	0	a(b		-
+a\(*b		ab	y	1	0	ab		-
+a\(*b		a((b	y	1	0	a((b		-
+a\\b		a\b	y	1	0	a\b		-
+abc)		abc)	y	1	0	abc)		-
+(abc		-	c	-1	-1	-		-
+((a))		abc	y	3	0	a		-
+((a))		abc	y	3	1	a		-
+((a))		abc	y	3	2	a		-
+(a)b(c)		abc	y	3	0	abc		-
+(a)b(c)		abc	y	3	1	a		-
+(a)b(c)		abc	y	3	2	c		-
+a+b+c		aabbabc	y	1	0	abc		-
+a**		-	c	-1	-1	-		-
+a*?		aa	y	1	0	-		-
+ba*?a		baaaa	y	1	0	ba		-
+ba*?ab		baaaab	y	1	0	baaaab		-
+a*?		aab	y	1	0	-		-
+a*?aa		aaaa	y	1	0	aa		-
+(a*)*		aaaa	y	2	0	aaaa		-
+(a*)*		aaaa	y	2	1	aaaa		-
+(a*)+		aaa	y	2	0	aaa		-
+(a*)+		aaa	y	2	1	aaa		-
+a+b		b	n	1	0	b		-
+a+b		b	n	-1	-1	-		-
+a+b		ab	y	1	0	ab		-
+(a|)*		aab	y	2	0	aa		-
+(a|)*		aab	y	2	1	a		-
+(a*|b)*		aaa	y	2	0	aaa		-
+(a*|b)*		bb	y	2	0	bb		-
+(a*|b)*		aaabaab y	2	0	aaabaab		-
+(a+|b)*		ab	y	2	0	ab		-
+(a+|b)*		ab	y	2	1	b		-
+(a+|b)+		ab	y	2	0	ab		-
+(a+|b)+		ab	y	2	1	b		-
+(a+|b)?		ab	y	2	0	a		-
+(a+|b)?		ab	y	2	1	a		-
+[^ab]*		cde	y	1	0	cde		-
+(^)*		ab	y	2	0	-		-
+(^)*		ab	y	2	1	-		-
+(ab|)*		abab	y	2	0	abab		-
+(ab|)*		abab	y	2	1	ab		-
+)(		-	c	-1	-1	-		-
+abcd		abcd	y	1	0	abcd		-
+a(bc)d		abcd	y	2	0	abcd		-
+a(bc)d		abcd	y	2	1	bc		-
+([abc])*d	abbbcd	y	2	0	abbbcd		-
+([abc])*d	abbbcd	y	2	1	c		-
+([abc])*bcd	abcd	y	2	0	abcd		-
+([abc])*bcd	abcd	y	2	1	a		-
+a|b|c|d|e	e	y	1	0	e		-
+(a|b|c|d|e)f	ef	y	2	0	ef		-
+(a|b|c|d|e)f	ef	y	2	1	e		-
+((a*|b))*	abd	y	3	0	ab		-
+((a*|b))*	abd	y	3	1	b		-
+((a*|b))*	abd	y	3	2	b		-
+abcd*efg	abcdefg	y	1	0	abcdefg		-
+ab*		xabyabbbz	y	1 0	ab		-
+ab*		xayabbbz	y	1 0	a		-
+(ab|cd)e	abcde	y	2	0	cde		-
+(ab|cd)e	abcde	y	2	1	cd		-
+[abhgefdc]ij	hij	y	1	0	hij		-
+^(ab|cd)e	abcde	n	-1	-1	-		-
+^(ab|cd)e	abcde	n	-1	-1	ab		-
+^(ab|cd)e	abcde	n	2	0	-		-
+(abc|)ef	abcdef	y	2	0	ef		-
+(abc|)ef	abcdef	y	2	1	-		-
+(a|b)c*d	abcd	y	2	0	bcd		-
+(a|b)c*d	abcd	y	2	1	b		-
+(ab|ab*)bc	abc	y	2	0	abc		-
+(ab|ab*)bc	abc	y	2	0	abc		-
+(ab|ab*)bc	abc	y	2	1	a		-
+a([bc]*)c*	abc	y	2	0	abc		-
+a([bc]*)c*	abc	y	2	1	bc		-
+a([bc]*)(c*d)	abcd	y	3	0	abcd		-
+a([bc]*)(c*d)	abcd	y	3	1	bc		-
+a([bc]*)(c*d)	abcd	y	3	2	d		-
+a([bc]+)(c*d)	abcd	y	3	0	abcd		-
+a([bc]+)(c*d)	abcd	y	3	1	bc		-
+a([bc]+)(c*d)	abcd	y	3	2	d		-
+a([bc]*)(c+d)	abcd	y	3	0	abcd		-
+a([bc]*)(c+d)	abcd	y	3	1	b		-
+a([bc]*)(c+d)	abcd	y	3	2	cd		-
+a[bcd]*dcdcde	adcdcde	y	1	0	adcdcde		-
+a[bcd]+dcdcde	adcdcde	n	-1	-1	-		-
+(ab|a)b*c	abc	y	2	0	abc		-
+(ab|a)b*c	abc	y	2	1	ab		-
+((a)(b)c)(d)	abcd	y	5	0	abcd		-
+((a)(b)c)(d)	abcd	y	5	1	abc		-
+((a)(b)c)(d)	abcd	y	5	2	a		-
+((a)(b)c)(d)	abcd	y	5	3	b		-
+((a)(b)c)(d)	abcd	y	5	4	d		-
+[a-z]*		abc	y	1	0	abc		-
+[a-za-z]*	abc	y	1	0	abc		-
+[a-~a-~a-~]*			abc	y	1	0	abc		-
+[a-~a-~a-~a-~]*			abc	y	1	0	abc		-
+[a-~a-~a-~a-~a-~]*		abc	y	1	0	abc		-
+[a-~a-~a-~a-~a-~a-~]*		abc	y	1	0	abc		-
+[a-~a-~a-~a-~a-~a-~a-~]*	abc	y	1	0	abc		-
+[a-zA-Z_][a-zA-Z0-9_]*		alpha	y	1	0	alpha		-
+^a(bc+|b[eh])g|.h$		abh	y	2	0	bh		-
+(bc+d$|ef*g.|h?i(j|k))		effgz	y	3	0	effgz		-
+(bc+d$|ef*g.|h?i(j|k))		effgz	y	3	1	effgz		-
+(bc+d$|ef*g.|h?i(j|k))		effgz	y	3	2	-		-
+(bc+d$|ef*g.|h?i(j|k))		ij	y	3	0	ij		-
+(bc+d$|ef*g.|h?i(j|k))		ij	y	3	1	ij		-
+(bc+d$|ef*g.|h?i(j|k))		ij	y	3	2	j		-
+(bc+d$|ef*g.|h?i(j|k))		effg	n	-1	-1	-		-
+(bc+d$|ef*g.|h?i(j|k))		bcdd	n	-1	-1	-		-
+(bc+d$|ef*g.|h?i(j|k))		reffgz	y	3	0	effgz		-
+(bc+d$|ef*g.|h?i(j|k))		reffgz	y	3	1	effgz		-
+((((((((((a))))))))))		a	y	11	0	a		-
+((((((((((a))))))))))		a	y	11	1	a		-
+((((((((((a))))))))))		a	y	11	2	a		-
+((((((((((a))))))))))		a	y	11	3	a		-
+((((((((((a))))))))))		a	y	11	4	a		-
+((((((((((a))))))))))		a	y	11	5	a		-
+((((((((((a))))))))))		a	y	11	6	a		-
+((((((((((a))))))))))		a	y	11	7	a		-
+((((((((((a))))))))))		a	y	11	8	a		-
+((((((((((a))))))))))		a	y	11	9	a		-
+((((((((((a))))))))))		a	y	11	10	a		-
+#
+multiple_words		multiple_words,_yeah	y	1	0	multiple_words		-
+#
+# More Repetition
+#
+(.*)c(.*)		abcde	y	3	0	abcde		-
+(.*)c(.*)		abcde	y	3	1	ab		-
+(.*)c(.*)		abcde	y	3	2	de		-
+\((.*),_(.*)\)		(a,_b)	y	3	0	(a,_b)		-
+\((.*),_(.*)\)		(a,_b)	y	3	1	a		-
+\((.*),_(.*)\)		(a,_b)	y	3	2	b		-
+a{1}a			aaaabbc		y	1	0	aa		-
+a{2}a			aaaabbc		y	1	0	aaa		-
+a{3}a			aaaabbc		y	1	0	aaaa		-
+a{1}b			aaaabbc		y	1	0	ab		-
+a{,3}			aaa		y	1	0	aaa		-
+a{,3}			aaaa		y	1	0	aaa		-
+a{2,}			a		n	-1	-1	-		-
+a{2,}			aa		y	1	0	aa		-
+a{1,3}			b		n	-1	-1	-		-
+a{1,3}			a		y	1	0	a		-
+a{1,3}			aa		y	1	0	aa		-
+a{1,3}			aaa		y	1	0	aaa		-
+a{1,3}			aaaa		y	1	0	aaa		-
+a{1,3}			bab		y	1	0	a		-
+a{2,3}			bab		n	-1	-1	-		-
+a*?			a		y	1	0	-		-
+a*?b			a		n	-1	-1	-		-
+a*?b			aaab		y	1	0	aaab		-
+aa+?			a		n	-1	-1	-		-
+aa+?			aa		y	1	0	aa		-
+a*b			aaaab		y	1	0	aaaab		-
+#
+#
+(a|b)*?b		abb		y	2	0	abb		-
+(a|b)*?b		abb		y	2	1	ab		-
+(abc)\1			abcabc		y	2	0	abcabc		-
+(abc)\1			abcabc		y	2	1	abc		-
+(abc)\0			abcabc		y	2	0	abcabc		-
+(abc)\0			abcabc		y	2	1	abc		-
+(abc)\2			abcabc		c	-1	-1	-		-
+(abc)\2{2}		abcabc		c	-1	-1	-		-
+(abc)\1{2}		abcabcabc	y	2	0	abcabcabc		-
+(abc)\1{2}		abcabcabc	y	2	1	abc		-
+(a*)b(c*)d\1\2		aabcccdaaccc	y	3	0	aabcccdaaccc		-
+(a*)b(c*)d\1\2		aabcccdaaccc	y	3	1	aa		-
+(a*)b(c*)d\1\2		aabcccdaaccc	y	3	2	ccc		-
+(a*)b(c*)d\1\2		abcccdaaccc	n	3	0	-		-
+(a*)b(c*)d\1\2		abcccdacc	n	3	0	-		-
+fred\wbert		fred-bert	n	-1	-1	-		-
+fred\wbert		fred#bert	n	-1	-1	-		-
+fred\Wbert		fred#bert	y	1	0	fred#bert		-
+fred\Wbert		fred_bert	n	-1	-1	-		-
+ab|cd			ab		y	1	0	ab		-
+fred|(bert|(tom4|snot))|jim1|mary" snot	y	3	0	snot		-
+fred|(bert|(tom4|snot))|jim1|mary" snot	y	3	1	snot		-
+fred|(bert|(tom4|snot))|jim1|mary" snot	y	3	2	snot		-
+fred|(bert|(tom4|snot))|jim1|mary" bert	y	3	0	bert		-
+fred|(bert|(tom4|snot))|jim1|mary" bert	y	3	1	bert		-
+fred|(bert|(tom4|snot))|jim1|mary" bert	y	3	2	-		-
+fred$			fred		y	1	0	fred		-
+fred			fred		y	1	0	fred		-
+$			abcd		y	1	0	-		-
+^			abcd		y	1	0	-		-
+x|^			abcd		y	1	0	-		-
+x|$			abcd		y	1	0	-		-
+x			abcd		n	-1	-1	-		-
+.			abcd		y	1	0	a		-
+^.*\\\\.*$		c:\\Tools	y	1	0	c:\\Tools		-
+\\			a		n	-1	-1	-		-
+\\			\		y	1	0	\		-
+\\x			\x		y	1	0	\x		-
+\x21			!		y	1	0	!		-
+\x61			a		y	1	0	a		-
+\x61			A		n	-1	-1	a		-
+\x61			a		y	1	0	a		i
+\x41			A		y	1	0	A		i
+^.+$			-		n	-1	-1	-		-
+^(.+)$			-		n	-1	-1	-		-
+^([+-]?)([\\d]+)$	+		n	-1	-1	-		-
+^([+-]?)([\d]+)$	+27		y	3	0	+27		-
+^([+-]?)([\d]+)$	+27		y	3	1	+		-
+^([+-]?)([\d]+)$	+27		y	3	2	27		-
+tel:\+(\d+[\d-]+\d)	tel:+1-201-555-0123;a=b	y	2	0	tel:+1-201-555-0123		-
+tel:\+(\d+[\d-]+\d)	tel:+1-201-555-0123;a=b	y	2	1	1-201-555-0123		-
+[abc]			1c2		y	1	0	c		-
+[abc]			1C2		n	-1	-1	-		-
+[abc]			1C2		y	1	0	C		i
+[\.2]			1C2		y	1	0	2		i
+[\.2]			.C2		y	1	0	.		i
+[\S]+			ab@cd		y	1	0	ab		-
+\S+			ab@cd		y	1	0	ab		-
+\s+			ab@cd		y	1	0	@		-
+[\S]+\s+[tyc]*		ab@cd		y	1	0	ab@c		-
+[\d]			ab@cd		n	-1	-1	-		-
+[^\d]			ab@cd		y	1	0	a		-
+[^\d]+			abc123		y	1	0	abc		-
+[1-5]+			123456789	y	1	0	12345		-
+[1-5a-c]+		123abcdef	y	1	0	123abc		-
+[1-5a-]+		123abcdef	y	1	0	123a		-
+[1-5a-]+		123a--2oo	y	1	0	123a--2		-
+[htps]+://		https://	y	1	0	https://		-
+[^\s]+			abc@def		y	1	0	abc		-
+[^fc]+			abc@def		y	1	0	ab		-
+[^d\sf]+		abc@def		y	1	0	abc		-
+FO			foo		n	-1	-1	-		-
+FO			foo		y	1	0	fo		i
+(?m)FO			foo		c	-1	-1	-		-
+(?m)x			foo		c	-1	-1	-		-
+fo			foo		y	1	0	fo		-
+.+			foo		y	1	0	foo		-
+.+k			fooklmn		y	1	0	fook		-
+.+k.			fooklmn		y	1	0	fookl		-
+p+			fooklmn		n	1	0	-		-
+ok			fooklmn		y	1	0	ok		-
+lmno			fooklmn		n	1	0	-		-
+mn.			fooklmn		n	1	0	-		-
+o			fooklmn		y	1	0	o		-
+^o			fooklmn"	n	1	0	-		-
+^			fooklmn		y	1	0	-		-
+n$			fooklmn		y	1	0	n		-
+n$k			fooklmn		n	1	0	-		-
+l$			fooklmn		n	1	0	-		-
+.$			fooklmn		y	1	0	n		-
+a?			fooklmn		y	1	0	-		-
+^a*CONTROL		CONTROL		y	1	0	CONTROL		-
+[a]*CONTROL		CONTROL		y	1	0	CONTROL		-
+^(a*)CONTROL		CONTROL		y	2	0	CONTROL		-
+^(a*)CONTROL		CONTROL		y	2	1	-		-
+^(a*)?CONTROL		CONTROL		y	2	0	CONTROL		-
+^(a*)?CONTROL		CONTROL		y	2	1	-		-
+\_			abc		n	-1	-1	-		-
++			fooklmn		c	-1	-1	-		-
+()+			fooklmn		n	1	0	-		-
+\x			fooklmn		c	-1	-1	-		-
+\xhi			foo		c	-1	-1	-		-
+\x20			_@_		y	1	0	@		-
+\x4A			@@JBB		y	1	0	J		-
+\d+			abc123def	y	1	0	123		-
+(x))			fooklmn		n	1	0	-		-
+(x))			fooklmn		n	1	0	-		-
+(x))			foox)klmn	y	2	0	x)		-
+(x))			foox)klmn	y	2	0	x)		-
+(			fooklmn		c	-1	-1	-		-
+)			ab)c		y	1	0	)		-
+)$			ab)c		n	1	0	-		-
+klz?mn			fooklmn		y	1	0	klmn		-
+fa?b			fooklmn		n	1	0	-		-
+^(te)			tenacity@subdues@all	y	2	0	te		-
+^(te)			tenacity@subdues@all	y	2	1	te		-
+(bc)			abcdef		y	2	0	bc		-
+(bc)			abcdef		y	2	1	bc		-
+.(d.)			abcdef		y	2	0	cde		-
+.(d.)			abcdef		y	2	1	de		-
+.(d.)\)?		abcdef		y	2	0	cde		-
+.(d.)\)?		abcdef		y	2	1	de		-
+(.+)			123		y	2	0	123		-
+(.+)			123		y	2	1	123		-
+(2.+)			123		y	2	0	23		-
+(2.+)			123		y	2	1	23		-
+(.+2)			123		y	2	0	12		-
+(.+2)			123		y	2	1	12		-
+(.*(2.))		123		y	3	0	123		-
+(.*(2.))		123		y	3	1	123		-
+(.*(2.))		123		y	3	2	23		-
+(.)(.)			123		y	3	0	12		-
+(.)(.)			123		y	3	1	1		-
+(.)(.)			123		y	3	2	2		-
+(\d+)\s+(\S+)		12@hi		y	3	0	12@hi		-
+(\d+)\s+(\S+)		12@hi		y	3	1	12		-
+(\d+)\s+(\S+)		12@hi		y	3	2	hi		-
+ab(cd)+ef		abcdcdef	y	2	0	abcdcdef	-
+ab(cd)+ef		abcdcdef	y	2	1	cd		-
+ab(cd)*ef		abcdcdef	y	2	0	abcdcdef	-
+ab(cd)*ef		abcdcdef	y	2	1	cd		-
+ab(cd)+?ef		abcdcdef	y	2	0	abcdcdef	-
+ab(cd)+?ef		abcdcdef	y	2	1	cd		-
+ab(cd)+?.		abcdcdef	y	2	0	abcdc		-
+ab(cd)+?.		abcdcdef	y	2	1	cd		-
+ab(cd)?			abcdcdef	y	2	0	abcd		-
+ab(cd)?			abcdcdef	y	2	1	cd		-
+a(b)(cd)		abcdcdef	y	3	0	abcd		-
+a(b)(cd)		abcdcdef	y	3	1	b		-
+a(b)(cd)		abcdcdef	y	3	2	cd		-
+(.+/\d+\.\d+)\.jpg$	/foo/bar/12.34.jpg	y	2	0	/foo/bar/12.34.jpg		-
+(.+/\d+\.\d+)\.jpg$	/foo/bar/12.34.jpg	y	2	1	/foo/bar/12.34		-
+(ab|cd).*\.(xx|yy)	ab.yy		y	3	0	ab.yy		-
+(ab|cd).*\.(xx|yy)	ab.yy		y	3	1	ab		-
+(ab|cd).*\.(xx|yy)	ab.yy		y	3	2	yy		-
+.*a			abcdef		y	1	0	a		-
+(.+)c			abcdef		y	2	0	abc		-
+(.+)c			abcdef		y	2	1	ab		-
+\n			abc&def		y	1	0	&		-
+b.\s*\n			aa@&bb@&cc@&@&	y	1	0	bb@&		-
+.+c			abcabc		y	1	0	abcabc		-
+.+?c			abcabc		y	1	0	abc		-
+.*?c			abcabc		y	1	0	abc		-
+.*c			abcabc		y	1	0	abcabc		-
+bc.d?k?b+		abcabc"		y	1	0	bcab		-
+|			abc		y	1	0	-		-
+|.			abc		y	1	0	a		-
+.|.			abc		y	1	0	a		-
+.|			abc		y	1	0	a		-
+..|.			abc		y	1	0	ab		-
+x|y|b			abc		y	1	0	b		-
+k(xx|yy)|ca		abcabc		y	2	0	ca		-
+k(xx|yy)|ca		abcabc		y	2	1	-		-
+k(xx|yy)|ca|bc		abcabc		y	2	0	bc		-
+k(xx|yy)|ca|bc		abcabc		y	2	1	-		-
+(|.c)			abc		y	2	0	-		-
+(|.c)			abc		y	2	1	-		-
+a|b|c			a		y	1	0	a		-
+a|b|c			b		y	1	0	b		-
+a|b|c			c		y	1	0	c		-
+a|b|c			d		n	-1	-1	-		-
+^.*c.?$			abc		y	1	0	abc		-
+^.*C.?$			abc		y	1	0	abc		i
+bk?			ab		y	1	0	b		-
+b(k?)			ab		y	2	0	b		-
+b(k?)			ab		y	2	1	-		-
+b[k-z]*			ab		y	1	0	b		-
+ab(k|z|y)*		ab		y	2	0	ab		-
+ab(k|z|y)*		ab		y	2	1	-		-
+[b-z].*			ab		y	1	0	b		-
+(b|z|u).*		ab		y	2	0	b		-
+(b|z|u).*		ab		y	2	1	b		-
+ab(k|z|y)?		ab		y	2	0	ab		-
+ab(k|z|y)?		ab		y	2	1	-		-
+.*			ab		y	1	0	ab		-
+.*$			ab		y	1	0	ab		-
+a+$			aa		y	1	0	aa		-
+a*$			aa		y	1	0	aa		-
+ a+$			Xaa		y	1	0	aa		-
+ a*$			Xaa		y	1	0	aa		-
+[a-h]+			abcdefghxxx	y	1	0	abcdefgh		-
+[A-H]+			ABCDEFGHyyy	y	1	0	ABCDEFGH		-
+[a-h]+			ABCDEFGHyyy	n	-1	-1	-		-
+[A-H]+			abcdefghyyy	n	-1	-1	-		-
+[a-h]+			ABCDEFGHyyy	y	1	0	ABCDEFGH		i
+[A-H]+			abcdefghyyy	y	1	0	abcdefgh		i
+#
+# URLs etc
+#
+^\s*(\S+)\s+(\S+)\s+HTTP/(\d)\.(\d)	GET@/index.html@HTTP/1.0& y	5	0	GET@/index.html@HTTP/1.0		-
+^\s*(\S+)\s+(\S+)\s+HTTP/(\d)\.(\d)	GET@/index.html@HTTP/1.0& y	5	1	GET		-
+^\s*(\S+)\s+(\S+)\s+HTTP/(\d)\.(\d)	GET@/index.html@HTTP/1.0& y	5	2	/index.html		-
+^\s*(\S+)\s+(\S+)\s+HTTP/(\d)\.(\d)	GET@/index.html@HTTP/1.0& y	5	3	1		-
+^\s*(\S+)\s+(\S+)\s+HTTP/(\d)\.(\d)	GET@/index.html@HTTP/1.0& y	5	4	0		-
+#
+#
+#
+aa@([0-9]*)@*([x-z]*)\s+xy([yz])	aa@1234@xy&xyz	y	4	0	aa@1234@xy&xyz		-
+aa@([0-9]*)@*([x-z]*)\s+xy([yz])	aa@1234@xy&xyz	y	4	1	1234		-
+aa@([0-9]*)@*([x-z]*)\s+xy([yz])	aa@1234@xy&xyz	y	4	2	xy		-
+aa@([0-9]*)@*([x-z]*)\s+xy([yz])	aa@1234@xy&xyz	y	4	3	z		-
+^fred					bertfred		n	-1	-1	-	-
+^fred					bertfredbert		n	-1	-1	-	n
+^fred					bert\nfredbert		y	1	0	fred	n
+^fred					bert\rfredbert		n	-1	-1	-	n
+^fred					bert\r\nfredbert	y	1	0	fred	r
+^fred$					fred			y	1	0	fred	n
+fred(?=jim)				fredji			n	2	0	fred	-
+fred(?=jim)				fredjim			y	2	0	fred	-
+fred(?=jim)				fredjim			y	2	1	jim	-
+fred(?!jim)				fredjim			n	-1	-1	-	-
+fred(?!jim)				fredji			y	2	0	fred	-
+fred(?!jim)				fredji			y	2	1	-	-
+fred(?=(ab){2})				fredabab		y	3	0	fred	-
+fred(?=(ab){2})				fredabab		y	3	1	abab	-
+fred(?=(ab){2})				fredabab		y	3	2	ab	-
+fred(?=.*mary)				fredbertmary		y	2	0	fred	-
+fred(?=.*mary)				fredbertmary		y	2	1	bertmary	-
+^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[$%#!]).{8,15}$	abcdefhi	n	-1	-1	-	-
+^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[$%#!]).{8,15}$	a4cdefhi	n	-1	-1	-	-
+^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[$%#!]).{8,15}$	a4C!fhiqsher	y	5	0	a4C!fhiqsher	-
+^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[$%#!]).{8,15}$	a4C!fhiqsher	y	5	1	a4C		-
+^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[$%#!]).{8,15}$	a4C!fhiqsher	y	5	2	a		-
+^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[$%#!]).{8,15}$	a4C!fhiqsher	y	5	3	a4		-
+^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[$%#!]).{8,15}$	a4C!fhiqsher	y	5	4	a4C!		-
+^.{8,15}$(?<=.*?[A-Z])(?<=.*?[a-z])(?<=.*?[0-9])(?<=.*?[$%#!])	a4C!fhiqsher	y	5	0	a4C!fhiqsher	-
+(?P<se1>.*?e)e\1	abcdeeabcde	y	2	0	abcdeeabcde	-
+(?P<se1>.*?e)e\1	abcdeeabcde	y	2	1	abcde		-
+(?P<se1>.*?e)e\1q	abcdeeabcde	n	-1	-1	-		-
+(?P<se1.*?e)e\1q	abcdeeabcde	c	-1	-1	-		-
+(?P<se1.*?e)e\4		abcdeeabcde	c	-1	-1	-		-
+#
+#
+fredFRED			fredfred	y	1	0	fredfred	i
+fredFRED			fredfred	n	-1	-1	-		-
+fred(?i:fred)			fredfred	y	2	0	fredfred	-
+fred(?i:fred)			fredfred	y	2	1	fred		-
+fred(?i:fred)			fredFRED	y	2	0	fredFRED	-
+fred(?i:fred)			fredFRED	y	2	1	FRED		-
+fred(?i:fred)			fredFRED	y	2	1	FRED		-
+#
+fred(?-i:fred)			fredFRED	n	-1	-1	-		i
+fred(.*)(?-i:fred)		fredFREDfred	y	3	0	fredFREDfred	i
+fred(.*)(?-i:fred)		fredFREDfred	y	3	1	FRED		i
+fred(.*)(?-i:fred)		fredFREDfred	y	3	2	fred		i
+fred(.*)(?i:fred)		fredFREDfreD	y	3	0	fredFREDfreD	-
+fred(.*)(?i:fred)		fredFREDfreD	y	3	1	FRED		-
+fred(.*)(?i:fred)		fredFREDfreD	y	3	2	freD		-
+#
+#
+bert\n^fredmary			bertfredmary	n	-1	-1	-		-
+bert\n^fredmary			bert&fredmary	n	-1	-1	-		-
+bert\n^fredmary			bert&fredmary	y	1	0	bert&fredmary	n
+bert\n(?n:^fred)mary		bert&fredmary	y	2	0	bert&fredmary	-
+bert\n(?n:^fred)mary		bert&fredmary	y	2	1	fred		-
+bert\n(?-n:^fred)mary		bert&fredmary	n	-1	-1	fred		n
+#
+#
+# Flags
+#
+bert.(?n:^fred)mary		bert&fredmary	y	2	0	bert&fredmary	-
+bert.(?n:^fred)mary		bert&fredmary	y	2	1	fred		-
+bert.(?n:^fred)mary		bert&fredmary	n	-1	-1	bert&fredmary	dn
+bert\n(?n:^fred)mary		bert&fredmary	y	2	0	bert&fredmary	dn
+bert\n(?n:^fred)mary		bert&fredmary	y	2	1	fred		dn
+bert\n(?ni:^fred)mary		bert&frEdmary	y	2	0	bert&frEdmary	dn
+bert\n(?ni:^fred)mary		bert&frEdmary	y	2	1	frEd		dn
+bert.(?n:^fred)mary		bert&fredmary	y	2	0	bert&fredmary	n
+bert.(?-n:^fred)mary		bert&fredmary	n	-1	-1	-		n
+#
+#
+(aabb)*				aabbaabbc	n	-1	-1	-		m
+(aabb)*				aabbaabbc	y	2	0	aabbaabb	s
+(aabb)*				aabbaabbc	y	2	1	aabb		s
+(aabb)*				caabbaabb	n	-1	-1	-		m
+(aabb)+				caabbaabb	y	2	0	aabbaabb	s
+(aabb)+				caabbaabb	y	2	1	aabb		s
+#
+#
+# Atomic subexpressions
+#
+a(?>bc|b)c			abcc		y	2	0	abcc		m
+a(?>bc|b)c			abcc		y	2	1	bc		m
+a(?>bc|b)c			abc		n	-1	-1	-		m
+#
+# Recursion
+#
+a(?R)?z				az		y	2	0	az		m
+a(?R)?z				az		y	2	1	-		m
+a(?R)?z				azz		n	-1	-1	-		m
+a(?R)?z				aaz		n	-1	-1	-		m
+a(?R)?z				aazz		y	2	0	aazz		m
+a(?R)?z				aazz		y	2	1	-		m
+#
+# Palindromes with odd numbers of letters
+#
+(\w)(?>(?R)|(\w?))\1		fred		n	-1	-1	fred		m
+(\w)(?>(?R)|(\w?))\1		freddre		n	-1	-1	fred		m
+(\w)(?>(?R)|(\w?))\1		fredderf	n	-1	-1	fredderf	m
+(\w)(?>(?R)|(\w?))\1		aaa		y	5	0	aaa		m
+(\w)(?>(?R)|(\w?))\1		aba		y	5	0	aba		m
+(\w)(?>(?R)|(\w?))\1		racecar		y	5	0	racecar		m
+(\w)(?>(?R)|(\w?))\1		racecarb	n	-1	-1	racecar		m
+#
+# Palindromes with odd numbers of letters
+#
+# Left as en exercise for the reader
+#
+# URL parsing
+#
+# This regex does a reasonable job or parsing a URL (for the http schema)
+# but is not perfect.
+#
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@fred.bert:33/dir1/dir2?arg1?arg2 y 28 3 http X
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@fred.bert:33/dir1/dir2?arg1?arg2 y 28 7 theuser X
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@fred.bert:33/dir1/dir2?arg1?arg2 y 28 12 thepassword X
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@fred.bert:33/dir1/dir2?arg1?arg2 y 28 21 fred.bert X
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@[8.9.10.11]:33/dir1/dir2?arg1?arg2 y 28 16 8.9.10.11 X
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@[fe08::1]:33/dir1/dir2?arg1?arg2 y 28 19 fe08::1 X
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@[fe08::1]:33/dir1/dir2?arg1?arg2 y 28 23 33 X
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@[fe08::1]:33/dir1/dir2?arg1?arg2 y 28 25 dir1/dir2 X
+^(((?P<schema>^[^:]++)://))?+((((?P<user>[^@:]++)(?=([:@]))((\:(?P<password>[^@]++)))?+)@)?+)?+(?>((\[(?P<ipv4>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))\])|(\[(?P<ipv6>([\h:]{2,}+))\])|(?P<hostname>[\w\.]*))?+)(:(?P<port>\d{1,5}+))?+(/(?P<path>[^?]++))?+(\?(?P<query>.*+))?+$ http://theuser:thepassword@[fe08::1]:33/dir1/dir2?arg1?arg2 y 28 27 arg1?arg2 X
+#
+.*fred			jim&fred	y	1	0	jim&fred	s
+.*fred			jim&fred	y	1	0	fred		sdn
+.*fred			jim&fred	y	1	0	jim&fred	sdr
+.*fred			jim&&fred	y	1	0	fred		sdr
